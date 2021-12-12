@@ -34,7 +34,8 @@ class MyGameMenu {
     add_listening_events() {
         let outer = this;
         this.$single_mode.click(function(){
-            console.log("click single-mode");
+            outer.hide();
+            outer.root.playground.show();
         });
 
         this.$multi_mode.click(function(){
@@ -44,6 +45,14 @@ class MyGameMenu {
         this.$settings.click(function(){
             console.log("click settings");
         });
+    }
+
+    show() {  //展示菜单页面
+        this.$menu.show();
+    }
+
+    hide() {  //隐藏菜单页面
+        this.$menu.hide();
     }
 
 }
