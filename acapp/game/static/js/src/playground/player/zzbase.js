@@ -20,6 +20,8 @@ class Player extends MyGameObject {
         this.spend_time = 0;
         this.cur_skill = null;
         this.is_dead = false;
+        this.frozen_time = 0;
+        this.origin_color = color;
     }
 
     start() {
@@ -47,17 +49,30 @@ class Player extends MyGameObject {
                 if (outer.cur_skill === "fireball") {
                     outer.shoot_fireball(e.clientX, e.clientY);
                 }
+                else if( outer.cur_skill === "iceball") {
+                    outer.shoot_iceball(e.clientX, e.clientY);
+                }
 
                 outer.cur_skill = null;
             }
         });
 
-        $(window).keydown(function(e) {
+        $(window).keydown(function(e) { // press Q, release fireball skill
             if( e.which === 81) { // Q
                 outer.cur_skill = "fireball";
                 return false;
             }
         });
+
+        $(window).keydown(function(e) { // press W, release iceball skill
+            if(e.which === 87) { // W
+                outer.cur_skill = "iceball";
+                return false;
+            }
+
+        });
+
+
     }
 
     shoot_fireball(tx, ty) {
@@ -78,6 +93,20 @@ class Player extends MyGameObject {
         let dx = x1 - x2;
         let dy = y1 - y2;
         return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    shoot_iceball(tx, ty) {
+        if(this.is_dead) {
+            return ;
+        }
+        let x = this.x, y = this.y;
+        let radius = this.playground.height * 0.01;
+        let angle = Math.atan2(ty - this.y, tx - this.x);
+        let vx = Math.cos(angle), vy = Math.sin(angle);
+        let color = 'rgb(0, 255, 255)';
+        let speed = this.playground.height * 0.5;
+        let move_length = this.playground.height * 0.7;
+        new IceBall(this.playground, this, x, y, radius, vx, vy, color, speed, move_length, this.playground.height * 0.01);
     }
 
 
@@ -115,12 +144,29 @@ class Player extends MyGameObject {
 
     update() {
         this.spend_time += this.timedelta / 1000;
+        if( this.color !== this.origin_color) {
+            this.frozen_time += this.timedelta / 1000;
+        }
         if( !this.is_me && this.spend_time > 4 && Math.random() < 1 / 180.0){
             let player = this.playground.players[Math.floor(Math.random() * this.playground.players.length)];
             let tx = player.x + player.speed * this.vx * this.timedelta / 1000 * 0.3;
             let ty = player.y + player.speed * this.vy * this.timedelta / 1000 * 0.3;
             this.shoot_fireball(player.x, player.y);
+            if( Math.floor(Math.random() * 2) > 0) {
+                this.shoot_fireball(player.x, player.y);
+            } else {
+                this.shoot_iceball(player.x, player.y);
+            }
+
         }
+
+        if( this.frozen_time > 2) {
+            this.speed = this.playground.height * 0.15;
+            this.color = this.origin_color;
+            this.frozen_time = 0;
+        }
+
+
         if( this.damage_speed > 10) {
             this.vx = this.vy = 0;
             this.move_length = 0;

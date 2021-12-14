@@ -202,6 +202,8 @@ class Player extends MyGameObject {
         this.spend_time = 0;
         this.cur_skill = null;
         this.is_dead = false;
+        this.frozen_time = 0;
+        this.origin_color = color;
     }
 
     start() {
@@ -229,17 +231,30 @@ class Player extends MyGameObject {
                 if (outer.cur_skill === "fireball") {
                     outer.shoot_fireball(e.clientX, e.clientY);
                 }
+                else if( outer.cur_skill === "iceball") {
+                    outer.shoot_iceball(e.clientX, e.clientY);
+                }
 
                 outer.cur_skill = null;
             }
         });
 
-        $(window).keydown(function(e) {
+        $(window).keydown(function(e) { // press Q, release fireball skill
             if( e.which === 81) { // Q
                 outer.cur_skill = "fireball";
                 return false;
             }
         });
+
+        $(window).keydown(function(e) { // press W, release iceball skill
+            if(e.which === 87) { // W
+                outer.cur_skill = "iceball";
+                return false;
+            }
+
+        });
+
+
     }
 
     shoot_fireball(tx, ty) {
@@ -260,6 +275,20 @@ class Player extends MyGameObject {
         let dx = x1 - x2;
         let dy = y1 - y2;
         return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    shoot_iceball(tx, ty) {
+        if(this.is_dead) {
+            return ;
+        }
+        let x = this.x, y = this.y;
+        let radius = this.playground.height * 0.01;
+        let angle = Math.atan2(ty - this.y, tx - this.x);
+        let vx = Math.cos(angle), vy = Math.sin(angle);
+        let color = 'rgb(0, 255, 255)';
+        let speed = this.playground.height * 0.5;
+        let move_length = this.playground.height * 0.7;
+        new IceBall(this.playground, this, x, y, radius, vx, vy, color, speed, move_length, this.playground.height * 0.01);
     }
 
 
@@ -297,12 +326,29 @@ class Player extends MyGameObject {
 
     update() {
         this.spend_time += this.timedelta / 1000;
+        if( this.color !== this.origin_color) {
+            this.frozen_time += this.timedelta / 1000;
+        }
         if( !this.is_me && this.spend_time > 4 && Math.random() < 1 / 180.0){
             let player = this.playground.players[Math.floor(Math.random() * this.playground.players.length)];
             let tx = player.x + player.speed * this.vx * this.timedelta / 1000 * 0.3;
             let ty = player.y + player.speed * this.vy * this.timedelta / 1000 * 0.3;
             this.shoot_fireball(player.x, player.y);
+            if( Math.floor(Math.random() * 2) > 0) {
+                this.shoot_fireball(player.x, player.y);
+            } else {
+                this.shoot_iceball(player.x, player.y);
+            }
+
         }
+
+        if( this.frozen_time > 2) {
+            this.speed = this.playground.height * 0.15;
+            this.color = this.origin_color;
+            this.frozen_time = 0;
+        }
+
+
         if( this.damage_speed > 10) {
             this.vx = this.vy = 0;
             this.move_length = 0;
@@ -346,6 +392,85 @@ class Player extends MyGameObject {
         }
     }
 }
+class IceBall extends MyGameObject {
+    constructor(playground, player, x, y, radius, vx, vy, color, speed, move_length, damage) {
+        super();
+        this.playground = playground;
+        this.player = player;
+        this.ctx = this.playground.game_map.ctx;
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.color = color;
+        this.radius = radius;
+        this.speed = speed;
+        this.move_length = move_length;
+        this.eps = 0.1;
+        this.damage = damage;
+        this.distance = 0;
+    }
+
+    start(){
+
+    }
+
+    update() {
+        if(this.move_length < this.eps) {
+            this.destory();
+            return false;
+        }
+
+        let moved = Math.min(this.move_length, this.speed * this.timedelta / 1000);
+        this.x += this.vx * moved;
+        this.y += this.vy * moved;
+        this.move_length -= moved;
+
+        for(let i = 0; i < this.playground.players.length; i ++) {
+            let player = this.playground.players[i];
+            if( this.player !== player && this.is_collision(player)) {
+                console.log(i);
+                this.attack(player);
+            }
+        }
+
+        this.render();
+    }
+
+    get_dist(x1, y1, x2, y2) { // get distance between iceball and player
+        let dx = x1 - x2;
+        let dy = y1 - y2;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+
+    is_collision(player) {
+        this.distance = this.get_dist(this.x, this.y, player.x, player.y);
+        if ( this.distance < (this.radius + player.radius)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    attack(player) {
+        let angle = Math.atan2(player.y - this.y, player.x - this.x);
+        player.is_attacked(angle, this.damage);
+        player.speed = 0;
+        player.color = this.color;
+        this.destory();
+    }
+
+    render() { // draw iceball
+        this.ctx.beginPath();
+        this.ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
+        this.ctx.fillStyle = this.color;
+        this.ctx.fill();
+    }
+
+
+
+}
 class FireBall extends MyGameObject {
     constructor(playground, player, x, y, radius, vx, vy, color, speed, move_length, damage){
         super();
@@ -362,6 +487,7 @@ class FireBall extends MyGameObject {
         this.move_length = move_length;
         this.eps = 0.1;
         this.damage = damage;
+        this.distance = 0;
     }
 
     start() {
@@ -382,13 +508,11 @@ class FireBall extends MyGameObject {
         for(let i = 0; i < this.playground.players.length; i ++) {
             let player = this.playground.players[i];
             if(this.player !== player && this.is_collision(player)) {
+                console.log(i);
                 this.attack(player);
 
             }
-
-
         }
-
 
         this.render();
     }
@@ -400,8 +524,8 @@ class FireBall extends MyGameObject {
     }
 
     is_collision(player) {
-        let distance = this.get_dist(this.x, this.y, player.x, player.y);
-        if( distance < this.radius + player.radius ) {
+        this.distance = this.get_dist(this.x, this.y, player.x, player.y);
+        if( this.distance < this.radius + player.radius ) {
             return true;
         }
         return false;
@@ -434,7 +558,7 @@ class MyGamePlayground {
         this.players = [];
         this.players.push(new Player(this, this.width / 2, this.height / 2, this.height * 0.05, "white", this.height * 0.15, true));
 
-        for(let i = 0; i < 20; i ++) {
+        for(let i = 0; i < 15; i ++) {
             this.players.push(new Player(this, this.width / 2, this.height / 2, this.height * 0.05, this.get_random_color(), this.height * 0.15, false));
         }
 
